@@ -1,10 +1,10 @@
-name: Build TWRP Recovery
+name: Build TWRP Recovery with Kernel
 
 on:
   push:
-    branches: [ "fourteen" ]
+    branches: [ "main", "fourteen" ]
   pull_request:
-    branches: [ "fourteen" ]
+    branches: [ "main", "fourteen" ]
   workflow_dispatch:
 
 jobs:
@@ -14,10 +14,13 @@ jobs:
       image: ubuntu:20.04
 
     steps:
-    - name: Checkout device tree
+    - name: Checkout TWRP device tree
       uses: actions/checkout@v4
-      with:
-        path: device-tree
+
+    - name: Clone kernel from device repository
+      run: |
+        git clone https://github.com/gtty6/device_boe_onn11TabletPro.git device-kernel
+        ls -la device-kernel/prebuilts/
 
     - name: Install dependencies
       run: |
@@ -48,12 +51,17 @@ jobs:
         cd ~/twrp-build
         repo sync -j4 --force-sync
 
-    - name: Clone device tree
+    - name: Copy device tree
       run: |
         mkdir -p ~/twrp-build/device/boe/onn11TabletPro
-        cp -r device-tree/* ~/twrp-build/device/boe/onn11TabletPro/
+        cp -r * ~/twrp-build/device/boe/onn11TabletPro/ || true
 
-    - name: Build TWRP
+    - name: Integrate kernel
+      run: |
+        mkdir -p ~/twrp-build/device/boe/onn11TabletPro/prebuilt
+        cp device-kernel/prebuilts/kernel ~/twrp-build/device/boe/onn11TabletPro/prebuilt/kernel
+
+    - name: Build TWRP recovery image
       run: |
         cd ~/twrp-build
         source build/envsetup.sh
