@@ -1,1 +1,75 @@
-.github/workflows/twrp-build.yml
+name: Build TWRP Recovery
+
+on:
+  push:
+    branches: [ "fourteen" ]
+  pull_request:
+    branches: [ "fourteen" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+    - name: Checkout device tree
+      uses: actions/checkout@v4
+      with:
+        path: device-tree
+
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y \
+          git curl wget python3 python3-pip \
+          openjdk-11-jdk openjdk-11-jdk-headless \
+          build-essential bc bison flex ccache \
+          libssl-dev libncurses-dev libelf-dev binutils-dev
+
+    - name: Install Repo tool
+      run: |
+        mkdir -p ~/.bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+        chmod a+x ~/.bin/repo
+        echo "$HOME/.bin" >> $GITHUB_PATH
+
+    - name: Initialize TWRP environment
+      run: |
+        mkdir -p ~/twrp-build
+        cd ~/twrp-build
+        git config --global user.email "builder@github.com"
+        git config --global user.name "GitHub Builder"
+        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-14.1 --depth 1
+
+    - name: Sync TWRP sources
+      run: |
+        cd ~/twrp-build
+        repo sync -j4 --force-sync
+
+    - name: Clone device tree
+      run: |
+        mkdir -p ~/twrp-build/device/boe/onn11TabletPro
+        cp -r device-tree/* ~/twrp-build/device/boe/onn11TabletPro/
+
+    - name: Build TWRP
+      run: |
+        cd ~/twrp-build
+        source build/envsetup.sh
+        lunch omni_onn11TabletPro-eng
+        make recoveryimage -j4
+
+    - name: Upload recovery image
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: recovery-image
+        path: ~/twrp-build/out/target/product/onn11TabletPro/recovery.img
+
+    - name: Upload build log
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-logs
+        path: ~/twrp-build/out/logs/
